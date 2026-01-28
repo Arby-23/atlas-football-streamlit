@@ -1,21 +1,25 @@
 # app.py
 import streamlit as st
 import pandas as pd
-from atlas_engine import generate_picks
+import matplotlib.pyplot as plt
+from pipeline import get_daily_picks
 
+# -----------------------------
+# CONFIG
+# -----------------------------
 st.set_page_config(
     page_title="Atlas Football",
     layout="wide"
 )
 
 st.title("⚽ Atlas Football — Panel Operativo")
-
-st.markdown("Sistema de decisión probabilística (perfil balanceado)")
+st.markdown("Sistema de decisión probabilística · Perfil balanceado")
 
 # -----------------------------
-# Sidebar
+# SIDEBAR
 # -----------------------------
 st.sidebar.header("⚙️ Configuración")
+
 bankroll = st.sidebar.number_input(
     "Banca actual",
     min_value=100.0,
@@ -23,8 +27,28 @@ bankroll = st.sidebar.number_input(
     step=100.0
 )
 
-if st.sidebar.button("▶️ Generar Picks"):
-    picks = generate_picks(bankroll)
+leagues_allowed = st.sidebar.multiselect(
+    "Ligas activas",
+    [
+        "Premier League",
+        "La Liga",
+        "Serie A",
+        "Bundesliga",
+        "Ligue 1"
+    ],
+    default=["Premier League", "La Liga", "Serie A"]
+)
+
+run = st.sidebar.button("▶️ Generar Picks")
+
+# -----------------------------
+# EJECUCIÓN
+# -----------------------------
+if run:
+    picks = get_daily_picks(bankroll)
+
+    # Filtro por ligas
+    picks = [p for p in picks if p.league in leagues_allowed]
 
     if not picks:
         st.warning("No hay picks con edge suficiente hoy.")
@@ -34,6 +58,9 @@ if st.sidebar.button("▶️ Generar Picks"):
         st.subheader("📊 Picks del día")
         st.dataframe(df, use_container_width=True)
 
+        # -----------------------------
+        # MÉTRICAS
+        # -----------------------------
         st.subheader("📈 Métricas")
         col1, col2, col3 = st.columns(3)
 
@@ -41,5 +68,22 @@ if st.sidebar.button("▶️ Generar Picks"):
         col2.metric("Edge Promedio", f"{df.edge.mean():.2%}")
         col3.metric("Exposición Total", f"{df.stake.sum():.2f}")
 
+        # -----------------------------
+        # GRÁFICA BANCA
+        # -----------------------------
+        st.subheader("📉 Evolución simulada de banca")
+
+        bankroll_series = [bankroll]
+        for _, row in df.iterrows():
+            bankroll_series.append(
+                bankroll_series[-1] + row.stake * row.edge
+            )
+
+        fig, ax = plt.subplots()
+        ax.plot(bankroll_series)
+        ax.set_xlabel("Picks")
+        ax.set_ylabel("Banca")
+        st.pyplot(fig)
+
 else:
-    st.info("Configura la banca y genera los picks.")
+    st.info("Configura la banca, elige ligas y genera los picks.")
